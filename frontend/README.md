@@ -1,16 +1,26 @@
-# React + Vite
+# Tutora — interface de recherche et réservation
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interface React responsive connectée à l'API Laravel. Elle charge les matières et niveaux depuis le catalogue, recherche de vrais tuteurs compatibles et confirme les réservations via l'API.
 
-Currently, two official plugins are available:
+## Démarrer en local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Lancer d'abord le backend Laravel avec sa base et ses données :
 
-## React Compiler
+```sh
+cd backend
+php artisan serve
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Dans un autre terminal :
 
-## Expanding the ESLint configuration
+```sh
+cd frontend
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Ouvrir l'adresse locale affichée par Vite. Le proxy de développement transmet les requêtes `/api` à `http://127.0.0.1:8000`. Pour utiliser une autre adresse, créer un fichier `.env.local` depuis `.env.example` et définir `VITE_BACKEND_URL`. `VITE_API_URL` permet, en option, d'indiquer directement l'URL complète de l'API.
+
+## Parcours
+
+Choisir une matière, un niveau, une période de 1 à 15 jours et jusqu'à deux plages horaires quotidiennes. L'interface envoie ces préférences à `/api/matches`, affiche les profils et les créneaux réels renvoyés par le backend, puis collecte les coordonnées du parent au moment de réserver. La confirmation affiche la référence renvoyée par `/api/bookings`.
