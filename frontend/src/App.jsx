@@ -141,6 +141,7 @@ function App() {
   const [toDate, setToDate] = useState(addDays(today, 12))
   const [timeWindows, setTimeWindows] = useState([{ start: '08:00', end: '20:00' }])
   const [matches, setMatches] = useState(null)
+  const [searchCriteria, setSearchCriteria] = useState(null)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [sort, setSort] = useState('score')
@@ -197,6 +198,14 @@ function App() {
   const selectedDays = fromDate && toDate
     ? Math.round((new Date(`${toDate}T12:00:00`) - new Date(`${fromDate}T12:00:00`)) / 86_400_000) + 1
     : 0
+  const subjectLabel = searchCriteria?.subjectName || selectedSubject?.name || ''
+  const gradeLabel = searchCriteria?.schoolLevelName || selectedLevel?.name || '—'
+
+  function clearSearchResults() {
+    setMatches(null)
+    setSearchCriteria(null)
+    setSearchError('')
+  }
 
   const sortedMatches = useMemo(() => {
     if (!matches) return []
@@ -208,6 +217,7 @@ function App() {
   }, [matches, sort])
 
   function updateTimeWindow(index, field, value) {
+    clearSearchResults()
     setTimeWindows((current) => current.map((window, windowIndex) => (
       windowIndex === index ? { ...window, [field]: value } : window
     )))
@@ -245,7 +255,7 @@ function App() {
     }
 
     setSearching(true)
-    setMatches(null)
+    clearSearchResults()
     try {
       const result = await apiRequest('/matches', {
         method: 'POST',
@@ -254,6 +264,14 @@ function App() {
           school_level_id: Number(levelId),
           availability,
         }),
+      })
+      setSearchCriteria({
+        subjectId: result.criteria.subject.id,
+        subjectName: result.criteria.subject.name,
+        schoolLevelId: result.criteria.school_level.id,
+        schoolLevelName: result.criteria.school_level.name,
+        searchedDays: selectedDays,
+        timeWindowsCount: timeWindows.length,
       })
       setMatches(result.tutors || [])
     } catch (error) {
@@ -264,7 +282,8 @@ function App() {
   }
 
   function openBooking(tutor, slot) {
-    setSelectedSlot({ tutor, slot })
+    if (!searchCriteria) return
+    setSelectedSlot({ tutor, slot, criteria: searchCriteria })
     setBooking(null)
     setBookingError('')
     setBookingForm({ parent_name: '', parent_email: '', student_name: '', notes: '' })
@@ -288,8 +307,8 @@ function App() {
         body: JSON.stringify({
           tutor_id: selectedSlot.tutor.id,
           availability_id: selectedSlot.slot.id,
-          subject_id: Number(subjectId),
-          school_level_id: Number(levelId),
+          subject_id: selectedSlot.criteria.subjectId,
+          school_level_id: selectedSlot.criteria.schoolLevelId,
           ...bookingForm,
         }),
       })
@@ -308,8 +327,6 @@ function App() {
   function updateBookingForm(event) {
     setBookingForm((current) => ({ ...current, [event.target.name]: event.target.value }))
   }
-
-  const gradeLabel = selectedLevel?.name || '—'
 
   return (
     <div className="app-shell">
@@ -369,7 +386,7 @@ function App() {
                 <label className="field">
                   <span className="field-label"><Icon name="school" size={17} /> Niveau scolaire</span>
                   <span className="select-wrap">
-                    <select disabled={catalogLoading} onChange={(event) => setLevelId(event.target.value)} required value={levelId}>
+                    <select disabled={catalogLoading} onChange={(event) => { clearSearchResults(); setLevelId(event.target.value) }} required value={levelId}>
                       <option value="">Choisir un niveau</option>
                       {catalog.school_levels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}
                     </select>
@@ -379,7 +396,7 @@ function App() {
                 <label className="field">
                   <span className="field-label"><Icon name="book" size={17} /> Matière à travailler</span>
                   <span className="select-wrap">
-                    <select disabled={catalogLoading} onChange={(event) => setSubjectId(event.target.value)} required value={subjectId}>
+                    <select disabled={catalogLoading} onChange={(event) => { clearSearchResults(); setSubjectId(event.target.value) }} required value={subjectId}>
                       <option value="">Choisir une matière</option>
                       {catalog.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
                     </select>
@@ -401,11 +418,11 @@ function App() {
               <div className="form-grid form-grid-dates">
                 <label className="field">
                   <span className="field-label field-label-muted">À partir du</span>
-                  <input max={toDate || undefined} min={today} onChange={(event) => setFromDate(event.target.value)} required type="date" value={fromDate} />
+                  <input max={toDate || undefined} min={today} onChange={(event) => { clearSearchResults(); setFromDate(event.target.value) }} required type="date" value={fromDate} />
                 </label>
                 <label className="field">
                   <span className="field-label field-label-muted">Jusqu’au</span>
-                  <input min={fromDate || today} onChange={(event) => setToDate(event.target.value)} required type="date" value={toDate} />
+                  <input min={fromDate || today} onChange={(event) => { clearSearchResults(); setToDate(event.target.value) }} required type="date" value={toDate} />
                 </label>
                 <div className="duration-hint"><span className="duration-icon"><Icon name="calendar" size={17} /></span><span><b>{selectedDays > 0 ? `${selectedDays} jours` : 'Période à choisir'}</b><small>Jusqu’à 15 jours de recherche</small></span></div>
               </div>
@@ -417,10 +434,10 @@ function App() {
                     <label className="field field-time"><span className="sr-only">Heure de début, plage {index + 1}</span><input aria-label={`Heure de début, plage ${index + 1}`} onChange={(event) => updateTimeWindow(index, 'start', event.target.value)} required type="time" value={window.start} /></label>
                     <span className="time-separator">à</span>
                     <label className="field field-time"><span className="sr-only">Heure de fin, plage {index + 1}</span><input aria-label={`Heure de fin, plage ${index + 1}`} onChange={(event) => updateTimeWindow(index, 'end', event.target.value)} required type="time" value={window.end} /></label>
-                    {timeWindows.length > 1 && <button aria-label={`Supprimer la plage ${index + 1}`} className="remove-window" onClick={() => setTimeWindows((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button"><Icon name="close" size={17} /></button>}
+                    {timeWindows.length > 1 && <button aria-label={`Supprimer la plage ${index + 1}`} className="remove-window" onClick={() => { clearSearchResults(); setTimeWindows((current) => current.filter((_, itemIndex) => itemIndex !== index)) }} type="button"><Icon name="close" size={17} /></button>}
                   </div>
                 ))}
-                {timeWindows.length < 2 && <button className="add-window" onClick={() => setTimeWindows((current) => [...current, { start: '16:00', end: '20:00' }])} type="button"><Icon name="plus" size={15} /> Ajouter une plage horaire</button>}
+                {timeWindows.length < 2 && <button className="add-window" onClick={() => { clearSearchResults(); setTimeWindows((current) => [...current, { start: '16:00', end: '20:00' }]) }} type="button"><Icon name="plus" size={15} /> Ajouter une plage horaire</button>}
               </div>
 
               {searchError && <p className="form-error" role="alert">{searchError}</p>}
@@ -441,7 +458,7 @@ function App() {
               <div>
                 <span className="section-kicker">Votre sélection personnalisée</span>
                 <h2>{matches.length ? `${matches.length} ${matches.length > 1 ? 'tuteurs correspondent' : 'tuteur correspond'}` : 'Aucun tuteur trouvé pour le moment'}</h2>
-                <p>{matches.length ? <>Pour <b>{selectedSubject?.name}</b> · niveau <b>{gradeLabel}</b> · {selectedDays} jours de disponibilités</> : 'Essayez d’élargir la période ou les horaires demandés.'}</p>
+                <p>{matches.length ? <>Pour <b>{subjectLabel}</b> · niveau <b>{gradeLabel}</b> · {searchCriteria?.searchedDays} jours de disponibilités</> : 'Essayez d’élargir la période ou les horaires demandés.'}</p>
               </div>
               {matches.length > 0 && <label className="sort-control"><span>Trier par</span><span className="select-wrap"><select onChange={(event) => setSort(event.target.value)} value={sort}><option value="score">Meilleure pertinence</option><option value="rating">Meilleures notes</option><option value="experience">Plus d’expérience</option></select><Icon className="select-chevron" name="chevron" size={15} /></span></label>}
             </div>
@@ -475,8 +492,8 @@ function App() {
 
                       <p className="tutor-bio">{tutor.bio}</p>
                       <div className="tutor-tags">
-                        {tutor.subjects.map((subject) => <span className={`subject-tag${subject.id === Number(subjectId) ? ' subject-tag-selected' : ''}`} key={subject.id}>{subject.name}</span>)}
-                        {tutor.school_levels.some((level) => level.id === Number(levelId)) && <span className="level-tag"><Icon name="school" size={13} /> Niveau {gradeLabel}</span>}
+                        {tutor.subjects.map((subject) => <span className={`subject-tag${subject.id === searchCriteria?.subjectId ? ' subject-tag-selected' : ''}`} key={subject.id}>{subject.name}</span>)}
+                        {tutor.school_levels.some((level) => level.id === searchCriteria?.schoolLevelId) && <span className="level-tag"><Icon name="school" size={13} /> Niveau {gradeLabel}</span>}
                       </div>
 
                       <div className="slot-area">
@@ -502,9 +519,9 @@ function App() {
                     <div className="summary-top"><span className="summary-icon"><Icon name="spark" size={19} /></span><span>Votre recherche</span></div>
                     <h3>Un accompagnement<br />à la bonne mesure.</h3>
                     <div className="summary-lines">
-                      <div><span>Matière</span><b>{selectedSubject?.name}</b></div>
+                      <div><span>Matière</span><b>{subjectLabel}</b></div>
                       <div><span>Niveau</span><b>{gradeLabel}</b></div>
-                      <div><span>Disponibilité</span><b>{selectedDays} jours · {timeWindows.length} plage{timeWindows.length > 1 ? 's' : ''}</b></div>
+                      <div><span>Disponibilité</span><b>{searchCriteria?.searchedDays} jours · {searchCriteria?.timeWindowsCount} plage{searchCriteria?.timeWindowsCount > 1 ? 's' : ''}</b></div>
                     </div>
                     <div className="summary-note"><Icon name="shield" size={16} /><span>Les critères essentiels sont vérifiés avant le classement des profils.</span></div>
                   </div>
@@ -549,7 +566,7 @@ function App() {
                 <div className="modal-heading"><span className="modal-icon"><Icon name="calendar" size={20} /></span><span className="section-kicker">Dernière étape</span><h2 id="booking-title">Réservez votre cours</h2><p>Votre séance sera confirmée dès validation.</p></div>
                 <div className="booking-recap">
                   <TutorAvatar tutor={selectedSlot.tutor} />
-                  <span><b>{selectedSlot.tutor.first_name} {selectedSlot.tutor.last_name}</b><small>{selectedSubject?.name} · Niveau {gradeLabel}</small><small>{formatFullDate(selectedSlot.slot.starts_at)}</small></span>
+                  <span><b>{selectedSlot.tutor.first_name} {selectedSlot.tutor.last_name}</b><small>{selectedSlot.criteria.subjectName} · Niveau {selectedSlot.criteria.schoolLevelName}</small><small>{formatFullDate(selectedSlot.slot.starts_at)}</small></span>
                   <span className="recap-check"><Icon name="check" size={16} /></span>
                 </div>
                 <form className="booking-form" onSubmit={submitBooking}>
