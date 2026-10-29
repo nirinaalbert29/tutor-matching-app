@@ -1,59 +1,79 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# API de mise en relation avec un tuteur
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+API Laravel pour rechercher des tuteurs selon la matière, le niveau scolaire et les créneaux demandés, puis réserver un cours.
 
-## About Laravel
+## Installation locale
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Prérequis : PHP 8.2+, Composer et PostgreSQL.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+1. Copier `.env.example` vers `.env` si le fichier n'existe pas, puis renseigner `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` et `DB_PASSWORD` pour PostgreSQL.
+2. Depuis le dossier `backend`, installer les dépendances et créer la clé :
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+   ```sh
+   composer install
+   php artisan key:generate
+   ```
 
-## Learning Laravel
+3. Créer le schéma et les données de démonstration :
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+   ```sh
+   php artisan migrate --seed
+   ```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+4. Démarrer l'API :
 
-## Laravel Sponsors
+   ```sh
+   php artisan serve
+   ```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+L'API est disponible sur `http://localhost:8000/api`. Les migrations Laravel fonctionnent aussi avec SQLite pour un démarrage rapide. Configurez `FRONTEND_URL` pour autoriser l'origine Vite de l'interface.
 
-### Premium Partners
+## Routes
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+| Méthode | Route | Usage |
+| --- | --- | --- |
+| `GET` | `/api/catalog` | Liste les matières et niveaux disponibles. |
+| `GET` | `/api/tutors?subject_id=1&school_level_id=2` | Liste les tuteurs actifs, filtres facultatifs. |
+| `POST` | `/api/matches` | Applique les critères obligatoires et classe les tuteurs compatibles. |
+| `POST` | `/api/bookings` | Réserve un créneau libre et confirme le cours. |
+| `GET` | `/api/bookings/{reference}` | Récupère une confirmation à partir de sa référence UUID. |
 
-## Contributing
+### Recherche de tuteurs
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Envoyer `Content-Type: application/json` et `Accept: application/json` :
 
-## Code of Conduct
+```json
+{
+  "subject_id": 1,
+  "school_level_id": 5,
+  "availability": [
+    { "start_at": "2026-11-01T09:00:00Z", "end_at": "2026-11-01T12:00:00Z" },
+    { "start_at": "2026-11-03T13:00:00Z", "end_at": "2026-11-03T17:00:00Z" }
+  ]
+}
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Chaque créneau proposé tient entièrement dans au moins une plage demandée. La matière, le niveau, le statut actif et la disponibilité filtrent d'abord les résultats. Le classement facultatif attribue jusqu'à 50 points à la note, 30 à l'expérience et 20 aux cours déjà réalisés.
 
-## Security Vulnerabilities
+### Réservation
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Utiliser le `tutor_id` et un `availability_id` retournés par `/api/matches` :
 
-## License
+```json
+{
+  "tutor_id": 1,
+  "availability_id": 1,
+  "subject_id": 1,
+  "school_level_id": 5,
+  "parent_name": "Camille Martin",
+  "parent_email": "camille@example.com",
+  "student_name": "Alex Martin",
+  "notes": "Préparation au contrôle de mathématiques"
+}
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+La réservation est créée en transaction et une contrainte unique en base empêche de réserver deux fois le même créneau, même si plusieurs demandes arrivent en même temps. Une réservation réussie renvoie `201` et une référence de confirmation. Si le créneau a été pris entre-temps, l'API renvoie `409`.
+
+## Données de démonstration
+
+Le seeder crée 12 tuteurs, 8 matières, 7 niveaux scolaires et des créneaux à venir. Il est réexécutable sans supprimer les réservations enregistrées.
